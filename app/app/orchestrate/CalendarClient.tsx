@@ -88,6 +88,22 @@ export default function CalendarClient({ initialSessions, members, initialMonth 
     setShowStartModal(true);
   }
 
+  async function handleDeleteDaily(dateStr: string) {
+    if (!confirm(`Excluir a daily de ${format(parseISO(dateStr), "dd/MM/yyyy")}? Todas as tarefas e justificativas deste dia serão removidas.`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/daily/${dateStr}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Erro ao excluir daily');
+        return;
+      }
+      setSessions((prev) => prev.filter((s) => s.session_date !== dateStr));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleStartDaily(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedDate || !orchestratorName.trim()) return;
@@ -195,11 +211,16 @@ export default function CalendarClient({ initialSessions, members, initialMonth 
               border = 'border-amber-500/40';
               textColor = 'text-amber-300';
               status = '⚡ Em andamento';
+            } else if (today && !weekend && !outOfMonth) {
+              bg = 'bg-blue-500/10';
+              border = 'border-blue-500/30';
+              textColor = 'text-blue-300';
+              status = '◦ Em breve';
             } else if (!future && !weekend && !outOfMonth) {
               bg = 'bg-red-500/10';
               border = 'border-red-500/30';
               textColor = 'text-red-300';
-              status = '✗ Pendente';
+              status = '✗ Não realizada';
             }
 
             if (outOfMonth) {
@@ -210,17 +231,27 @@ export default function CalendarClient({ initialSessions, members, initialMonth 
             }
 
             return (
-              <button
-                key={dateStr}
-                onClick={() => handleDayClick(day)}
-                disabled={weekend || outOfMonth}
-                className={`aspect-square p-2 rounded-xl border transition text-left ${bg} ${border} ${textColor} ${
-                  weekend || outOfMonth ? 'cursor-default' : 'hover:scale-105 hover:shadow-lg cursor-pointer'
-                }`}
-              >
-                <div className="text-sm font-semibold">{format(day, 'd')}</div>
-                {status && <div className="text-[10px] mt-1 leading-tight">{status}</div>}
-              </button>
+              <div key={dateStr} className="relative group/day">
+                <button
+                  onClick={() => handleDayClick(day)}
+                  disabled={weekend || outOfMonth}
+                  className={`w-full aspect-square p-2 rounded-xl border transition text-left ${bg} ${border} ${textColor} ${
+                    weekend || outOfMonth ? 'cursor-default' : 'hover:scale-105 hover:shadow-lg cursor-pointer'
+                  }`}
+                >
+                  <div className="text-sm font-semibold">{format(day, 'd')}</div>
+                  {status && <div className="text-[10px] mt-1 leading-tight">{status}</div>}
+                </button>
+                {session && !outOfMonth && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteDaily(dateStr); }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none flex items-center justify-center opacity-0 group-hover/day:opacity-100 transition hover:bg-red-400 z-10"
+                    title="Excluir daily"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -236,8 +267,12 @@ export default function CalendarClient({ initialSessions, members, initialMonth 
             <span>Em andamento</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-blue-500/20 border border-blue-500/30"></div>
+            <span>Em breve (hoje)</span>
+          </div>
+          <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-red-500/20 border border-red-500/30"></div>
-            <span>Pendente (dia útil passado)</span>
+            <span>Não realizada</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-zinc-950 border border-zinc-800"></div>

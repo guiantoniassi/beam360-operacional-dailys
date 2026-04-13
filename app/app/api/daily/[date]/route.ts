@@ -63,3 +63,66 @@ export async function GET(
     previous_date: prevDate,
   });
 }
+
+// DELETE /api/daily/[date] — exclui daily + desassocia tarefas (só orquestrador)
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ date: string }> }
+) {
+  const session = await getSession();
+  if (!session || session.role !== 'orchestrator') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const { date } = await params;
+
+  const { data: dailySession } = await supabaseAdmin
+    .from('daily_sessions')
+    .select('id')
+    .eq('session_date', date)
+    .maybeSingle();
+
+  if (!dailySession) {
+    return NextResponse.json({ error: 'Daily não encontrada' }, { status: 404 });
+  }
+
+  // Remover justificativas desta daily
+  await supabaseAdmin
+    .from('carryover_justifications')
+    .delete()
+    .eq('daily_session_id', dailySession.id);
+
+  // Desassociar tarefas desta daily
+  await supabaseAdmin
+    .from('tasks')
+    .update({ daily_session_id: null })
+    .eq('daily_session_id', dailySession.id);
+
+  // Remover carryovers gerados para o dia seguinte (tarefas cujo parent veio desta daily)
+  const { data: tasksOfDay } = await supabaseAdmin
+    .from('tasks')
+    .select('id')
+    .eq('task_date', date);
+
+  if (tasksOfDay && tasksOfDay.length > 0) {
+    const ids = tasksOfDay.map((t) => t.id);
+    await supabaseAdmin
+      .from('tasks')
+      .delete()
+      .in('parent_task_id', ids);
+  }
+
+  // Deletar tarefas do dia
+  await supabaseAdmin
+    .from('tasks')
+    .delete()
+    .eq('task_date', date);
+
+  // Deletar a daily session
+  await supabaseAdmin
+    .from('daily_sessions')
+    .delete()
+    .eq('id', dailySession.id);
+
+  return NextResponse.json({ ok: true });
+}

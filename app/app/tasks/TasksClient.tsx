@@ -1,14 +1,22 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { Task, Client, DailySession, TaskArea, TaskType } from '@/lib/types';
+import { Task, Client, DailySession, TaskArea, UserRole } from '@/lib/types';
 import { formatLong } from '@/lib/dates';
+
+interface Member {
+  id: string;
+  full_name: string;
+}
 
 interface Props {
   initialTasks: Task[];
   clients: Client[];
   today: string;
   dailySession: DailySession | null;
+  currentUserId: string;
+  role: UserRole;
+  members: Member[];
 }
 
 const AREA_LABELS: Record<TaskArea, string> = {
@@ -33,16 +41,26 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   carryover: { label: 'Carryover', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
 };
 
-export default function TasksClient({ initialTasks, clients, today, dailySession }: Props) {
+export default function TasksClient({
+  initialTasks,
+  clients,
+  today,
+  dailySession,
+  currentUserId,
+  role,
+  members,
+}: Props) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const isOrchestrator = role === 'orchestrator';
 
   // Form state
   const [description, setDescription] = useState('');
   const [clientId, setClientId] = useState('');
   const [area, setArea] = useState<TaskArea | ''>('');
-  const [taskType, setTaskType] = useState<TaskType>('pontual');
+  const [assigneeId, setAssigneeId] = useState(currentUserId);
 
   const canEdit = !dailySession || dailySession.status !== 'in_progress';
 
@@ -58,8 +76,9 @@ export default function TasksClient({ initialTasks, clients, today, dailySession
           description: description.trim(),
           client_id: clientId || null,
           area: area || null,
-          task_type: taskType,
+          task_type: 'pontual',
           task_date: today,
+          user_id: assigneeId,
         }),
       });
       const data = await res.json();
@@ -71,7 +90,7 @@ export default function TasksClient({ initialTasks, clients, today, dailySession
       setDescription('');
       setClientId('');
       setArea('');
-      setTaskType('pontual');
+      setAssigneeId(currentUserId);
       setShowForm(false);
     } finally {
       setLoading(false);
@@ -171,7 +190,6 @@ export default function TasksClient({ initialTasks, clients, today, dailySession
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950/60 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="">—</option>
                 {clients.map((c) => (
@@ -189,7 +207,6 @@ export default function TasksClient({ initialTasks, clients, today, dailySession
               <select
                 value={area}
                 onChange={(e) => setArea(e.target.value as TaskArea | '')}
-                className="w-full px-3 py-2 bg-zinc-950/60 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="">—</option>
                 <option value="social">Social</option>
@@ -201,16 +218,18 @@ export default function TasksClient({ initialTasks, clients, today, dailySession
 
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-1.5 uppercase tracking-wider">
-                Tipo
+                Responsável
               </label>
               <select
-                value={taskType}
-                onChange={(e) => setTaskType(e.target.value as TaskType)}
-                className="w-full px-3 py-2 bg-zinc-950/60 border border-zinc-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                disabled={!isOrchestrator}
               >
-                <option value="pontual">Pontual</option>
-                <option value="recorrente">Recorrente</option>
-                <option value="evento">Evento</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.full_name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -256,6 +275,11 @@ export default function TasksClient({ initialTasks, clients, today, dailySession
                   <div className="flex-1 min-w-0">
                     <p className="text-zinc-100 leading-relaxed">{task.description}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-2.5">
+                      {task.user && (
+                        <span className="text-xs text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded">
+                          {task.user.full_name}
+                        </span>
+                      )}
                       {task.client && (
                         <span className="text-xs text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded">
                           {task.client.name}

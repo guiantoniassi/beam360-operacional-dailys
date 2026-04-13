@@ -10,14 +10,13 @@ export default async function TasksPage() {
   if (!session) redirect('/login');
   if (session.role === 'orchestrator') redirect('/orchestrate');
 
-  // Buscar dados iniciais (server-side)
   const today = todayISO();
 
-  const [userRes, tasksRes, clientsRes, dailyRes] = await Promise.all([
-    supabaseAdmin.from('users').select('color').eq('id', session.userId).single(),
+  const [userRes, tasksRes, clientsRes, dailyRes, membersRes] = await Promise.all([
+    supabaseAdmin.from('users').select('id, full_name, color').eq('id', session.userId).single(),
     supabaseAdmin
       .from('tasks')
-      .select('*, client:clients(id, name)')
+      .select('*, client:clients(id, name), user:users(id, full_name)')
       .eq('user_id', session.userId)
       .eq('task_date', today)
       .order('created_at', { ascending: true }),
@@ -27,6 +26,12 @@ export default async function TasksPage() {
       .eq('status', 'active')
       .order('name', { ascending: true }),
     supabaseAdmin.from('daily_sessions').select('*').eq('session_date', today).maybeSingle(),
+    supabaseAdmin
+      .from('users')
+      .select('id, full_name')
+      .eq('role', 'member')
+      .eq('is_active', true)
+      .order('full_name'),
   ]);
 
   return (
@@ -37,6 +42,9 @@ export default async function TasksPage() {
         clients={clientsRes.data || []}
         today={today}
         dailySession={dailyRes.data}
+        currentUserId={session.userId}
+        role={session.role}
+        members={membersRes.data || []}
       />
     </div>
   );
