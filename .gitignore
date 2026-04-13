@@ -1,0 +1,10 @@
+# Env files nunca vão pro repo
+.env*
+.env.local
+
+# Dependências
+node_modules/
+
+# Misc
+.DS_Store
+*.log
